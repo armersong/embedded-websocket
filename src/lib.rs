@@ -13,6 +13,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![deny(warnings)]
 
+extern crate alloc;
+
 use byteorder::{BigEndian, ByteOrder};
 use core::{cmp, result, str};
 use heapless::{String, Vec};
@@ -23,6 +25,7 @@ mod http;
 pub mod random;
 pub use self::http::{read_http_header, WebSocketContext};
 pub use self::random::EmptyRng;
+pub mod tcp;
 
 // support for working with discrete websocket frames when using IO streams
 // start here!!

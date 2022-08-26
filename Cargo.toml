@@ -17,10 +17,10 @@ byteorder = { version = "1.4.3", default-features = false }
 httparse = { version = "1.7.1", default-features = false }
 rand_core = "0.6.3"
 base64 = { version = "0.13.0", default-features = false }
+libc = "0.2"
 
 [dev-dependencies]
 rand = "0.8.5"
-libc = "0.2"
 
 # see readme for no_std support
 [features]
