@@ -6,13 +6,9 @@ use core::convert::From;
 
 const DEFAULT_TIME:u32 = 5000;
 
-extern "C" {
-    pub fn __errno_location() -> *mut libc::c_int;
-}
-
 #[inline]
 fn get_errno() -> i32 {
-    unsafe { *__errno_location() }
+    unsafe { *libc::__errno_location() }
 }
 
 #[derive(Debug)]
