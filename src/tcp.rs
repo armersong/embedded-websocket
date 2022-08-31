@@ -3,8 +3,9 @@
 use core::ffi::{c_void};
 use crate::framer::Stream;
 use core::convert::From;
+use core::ptr::null_mut;
 
-const DEFAULT_TIME:u32 = 5000;
+const DEFAULT_TIME:u32 = 500;
 
 #[inline]
 fn get_errno() -> i32 {
@@ -37,9 +38,9 @@ impl TcpStream {
                 return Err(IoError::from(get_errno()));
             }
             let my = Self{ fd: sock};
+            my.connect_internal(ip_host, port)?;
             my.set_send_timeout(DEFAULT_TIME)?;
             my.set_recv_timeout(DEFAULT_TIME)?;
-            my.connect_internal(ip_host, port)?;
             Ok(my)
         }
     }
@@ -76,6 +77,24 @@ impl TcpStream {
             return Err(IoError::from(get_errno()));
         }
         Ok(())
+    }
+
+    // @return: 0: timeout, >0: has data, <0:error
+    fn wait_event(&self, is_write: bool, to:u32) -> i32 {
+        unsafe {
+            let mut sets: libc::fd_set = core::mem::zeroed();
+            libc::FD_SET(self.fd, &mut sets);
+            let mut tv = libc::timeval {
+                tv_sec: (to/1000) as libc::time_t,
+                tv_usec: (to%1000*1000) as libc::suseconds_t,
+            };
+            let ret = if is_write {
+                libc::select(self.fd +1, null_mut(), &mut sets, null_mut(), &mut tv)
+            } else {
+                libc::select(self.fd +1, &mut sets, null_mut(), null_mut(), &mut tv)
+            };
+            ret
+        }
     }
 }
 

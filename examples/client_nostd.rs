@@ -15,10 +15,12 @@
 extern crate alloc;
 
 use embedded_websocket::{
-    framer::{Framer, ReadResult},
+    framer::{Framer, ReadResult, FramerError},
     WebSocketClient, WebSocketCloseStatusCode, WebSocketOptions, WebSocketSendMessageType,
 };
-use embedded_websocket::tcp::TcpStream;
+use embedded_websocket::tcp::{TcpStream, IoError};
+use core::ptr::null_mut;
+use alloc::format;
 
 #[no_mangle]
 pub extern "C" fn main(_argc:i32, _argv: *mut *mut i8) -> i32 {
@@ -51,7 +53,7 @@ pub extern "C" fn main(_argc:i32, _argv: *mut *mut i8) -> i32 {
     );
     framer.connect(&mut stream, &websocket_options).unwrap();
 
-    let message = "Hello, World!";
+    let message = ">>>";
     framer.write(
         &mut stream,
         WebSocketSendMessageType::Text,
@@ -59,14 +61,40 @@ pub extern "C" fn main(_argc:i32, _argv: *mut *mut i8) -> i32 {
         message.as_bytes(),
     ).unwrap();
 
-    while let ReadResult::Text(s) = framer.read(&mut stream, &mut frame_buf).unwrap() {
-        unsafe{ libc::printf("Received:%s\n\0".as_ptr() as *const i8, s.as_ptr()) };
-
-        // close the websocket after receiving the first reply
-        framer.close(&mut stream, WebSocketCloseStatusCode::NormalClosure, None).unwrap();
-        unsafe{ libc::printf("Sent close handshake\n\0".as_ptr() as *const i8) };
+    let mut count = 0;
+    loop {
+        match framer.read(&mut stream, &mut frame_buf) {
+            Ok(ReadResult::Text(s)) =>     {
+                unsafe{ libc::printf("[%u] Received:%s\n\0".as_ptr() as *const i8, libc::time(null_mut()), s.as_ptr()) };
+            }
+            Ok(_e) => {
+                panic!("other read result!");
+            }
+            Err(FramerError::Io(IoError::Timeout)) => {
+                unsafe{ libc::printf("[%u] Received timeout\n\0".as_ptr() as *const i8, libc::time(null_mut())) };
+            }
+            Err(e) => {
+                panic!("{:?}", e);
+            }
+        }
+        // unsafe { libc::usleep(1_000_000) };
+        count += 1;
+        if count > 20 {
+            // close the websocket after receiving the first reply
+            framer.close(&mut stream, WebSocketCloseStatusCode::NormalClosure, None).unwrap();
+            unsafe{ libc::printf("Sent close handshake\n\0".as_ptr() as *const i8) };
+            break;
+        }
+        if count % 2 == 0 {
+            let msg = format!("text {}", count);
+            framer.write(
+                &mut stream,
+                WebSocketSendMessageType::Text,
+                true,
+                msg.as_bytes(),
+            ).unwrap();
+        }
     }
-
     unsafe{ libc::printf("Connection closed\n\0".as_ptr() as *const i8) };
     0
 }
