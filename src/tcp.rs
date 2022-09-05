@@ -29,6 +29,7 @@ impl From<i32> for IoError {
 
 pub struct TcpStream {
     fd: i32,
+    is_connected: bool
 }
 impl TcpStream {
     pub fn connect(ip_host: u32, port:u16) -> Result<Self, IoError> {
@@ -37,15 +38,13 @@ impl TcpStream {
             if sock <0 {
                 return Err(IoError::from(get_errno()));
             }
-            let my = Self{ fd: sock};
-            my.connect_internal(ip_host, port)?;
-            my.set_send_timeout(DEFAULT_TIME)?;
-            my.set_recv_timeout(DEFAULT_TIME)?;
+            let mut my = Self{ fd: sock, is_connected: false };
+            my.reconnect(ip_host, port)?;
             Ok(my)
         }
     }
 
-    pub fn connect_internal(&self, ip_host:u32, port:u16) -> Result<(), IoError> {
+    pub fn reconnect(&mut self, ip_host:u32, port:u16) -> Result<(), IoError> {
         let addr = libc::sockaddr_in {
             sin_family: libc::AF_INET as u16,
             sin_port: port.to_be(),
@@ -58,8 +57,12 @@ impl TcpStream {
         if ret != 0 {
             return Err(IoError::from(get_errno()));
         }
+        self.is_connected = true;
+        self.set_send_timeout(DEFAULT_TIME)?;
+        self.set_recv_timeout(DEFAULT_TIME)?;
         Ok(())
     }
+
     pub fn set_send_timeout(&self, to:u32) -> Result<(), IoError> {
         self.set_timeout(libc::SO_SNDTIMEO, to)
     }
@@ -96,6 +99,10 @@ impl TcpStream {
             ret
         }
     }
+
+    pub fn is_connected(&self) -> bool {
+        self.is_connected
+    }
 }
 
 impl Drop for TcpStream {
@@ -109,6 +116,7 @@ impl Stream<IoError> for TcpStream  {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
         let len = unsafe{ libc::recv(self.fd, buf.as_mut_ptr() as *mut c_void, buf.len() as libc::size_t, 0)};
         if len <0 {
+            self.is_connected = false;
             return Err(IoError::from(get_errno()));
         }
         Ok(len as usize)
@@ -117,6 +125,7 @@ impl Stream<IoError> for TcpStream  {
     fn write_all(&mut self, buf: &[u8]) -> Result<(), IoError> {
         let len = unsafe{ libc::send(self.fd, buf.as_ptr() as *const c_void, buf.len() as libc::size_t, 0)};
         if len <0 {
+            self.is_connected = false;
             return Err(IoError::from(get_errno()));
         }
         Ok(())
