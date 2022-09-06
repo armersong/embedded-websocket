@@ -116,8 +116,13 @@ impl Stream<IoError> for TcpStream  {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
         let len = unsafe{ libc::recv(self.fd, buf.as_mut_ptr() as *mut c_void, buf.len() as libc::size_t, 0)};
         if len <0 {
-            self.is_connected = false;
-            return Err(IoError::from(get_errno()));
+            return Err(match IoError::from(get_errno()) {
+                IoError::Timeout => IoError::Timeout,
+                others => {
+                    self.is_connected = false;
+                    others
+                }
+            });
         }
         Ok(len as usize)
     }
@@ -125,8 +130,13 @@ impl Stream<IoError> for TcpStream  {
     fn write_all(&mut self, buf: &[u8]) -> Result<(), IoError> {
         let len = unsafe{ libc::send(self.fd, buf.as_ptr() as *const c_void, buf.len() as libc::size_t, 0)};
         if len <0 {
-            self.is_connected = false;
-            return Err(IoError::from(get_errno()));
+            return Err(match IoError::from(get_errno()) {
+                IoError::Timeout => IoError::Timeout,
+                others => {
+                    self.is_connected = false;
+                    others
+                }
+            });
         }
         Ok(())
     }
